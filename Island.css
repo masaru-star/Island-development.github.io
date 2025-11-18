@@ -27,9 +27,6 @@ td:hover {
     z-index: 1; 
     position: relative;
 }
-details summary {
-    color: #000000;
-}
 /* ---------------------------------------------------- */
 /* タイルの色定義                                       */
 /* ---------------------------------------------------- */
@@ -103,7 +100,7 @@ details summary {
     border-radius: 8px;
     margin-bottom: 15px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-    color: #000000; 
+    color: #ffffff; 
     font-size: 0.85em; 
     width: 300px;
 }
