@@ -1,4 +1,11 @@
-  let monster = null;
+let monster = null;
+const MONSTER_TYPES = {
+  1: { name: '怪獣シマオロシ', minHP: 1, maxHP: 1, ability: null, condition: (pop) => pop >= 60000 },
+  2: { name: '怪獣ヴォルカガロス', minHP: 2, maxHP: 4, ability: 'destroyArea', condition: (pop) => pop >= 120000 },
+  3: { name: '怪獣アエロガロス', minHP: 3, maxHP: 3, ability: 'multiMove', condition: (pop) => pop >= 120000 },
+  4: { name: '怪獣テラガロス', minHP: 5, maxHP: 5, ability: 'landfillSea', condition: (pop) => pop >= 150000 },
+  5: { name: '怪獣アクアガロス', minHP: 3, maxHP: 5, ability: 'createSea', condition: (pop) => pop >= 150000 }
+};
   const SIZE = 16;
   let money = 2500;
   let food = 1000;
@@ -447,14 +454,15 @@ function renderMap() {
       cell.onmouseover = () => showTileInfo(x, y);
       cell.onclick = () => selectTile(x, y);
       row.appendChild(cell);
-if (monster && monster.x === x && monster.y === y) {
-  cell.textContent = '👾';
-}
+      // ★変更: monsters 配列をチェック
+      const monsterAtTile = monsters.find(m => m.x === x && m.y === y);
+      if (monsterAtTile) {
+        cell.textContent = '👾';
+      }
     }
     table.appendChild(row);
   }
 }
-
 function showTileInfo(x, y) {
   const tile = map[y][x];
   let info = ` (${x},${y}) 地形: ${tile.terrain}`;
@@ -496,13 +504,17 @@ info += ` / 軍艦: ${warshipNameDisplay} (母港: ${warshipAtTile.homePort}, EX
           info += `, 派遣中`;
       }
       if (warshipAtTile.currentDurability <= 0) {
-          info += `, 残骸`;
+       info += `, 残骸`;
       }
       info += `)`;
   }
+  const monsterAtTile = monsters.find(m => m.x === x && m.y === y);
+  if (monsterAtTile) {
+      const typeInfo = MONSTER_TYPES[monsterAtTile.typeId] || { name: '不明な怪獣' };
+      info += ` / <span style="color: red;">${typeInfo.name} (体力: ${monsterAtTile.hp})</span>`;
+  }
   document.getElementById('tileInfo').innerHTML = info;
 }
-
 function selectTile(x, y) {
   selectedX = x;
   selectedY = y;
@@ -592,7 +604,8 @@ function saveGame() {
         achievementPoints: achievementPoints,
         tutorialMissions: tutorialMissions,
         islandName: islandName,
-        monster: monster ? JSON.parse(JSON.stringify(monster)) : null,
+        monster: null,
+        monsters: JSON.parse(JSON.stringify(monsters)), // 新しい配列を保存
         actionQueue: JSON.parse(JSON.stringify(actionQueue)),
         warships: JSON.parse(JSON.stringify(warships)) // 軍艦データを保存
     };
@@ -623,7 +636,26 @@ function loadGame() {
             '01': false, '02': false, '03': false, '04': false, '05': false, '06': false, '07': false, '08': false
         };
         islandName = gameState.islandName || "MyIsland";
-        monster = gameState.monster;
+        
+        // ★変更: 旧 monster データ処理
+        monsters = gameState.monsters || []; // 新しい形式を優先
+        if (gameState.monster && !gameState.monsters) { // 旧形式(monster)があり、新形式(monsters)がない
+            const oldMonster = gameState.monster;
+            // mapデータ(gameState.map)を使って地形チェック
+            if (gameState.map[oldMonster.y] && gameState.map[oldMonster.y][oldMonster.x] && gameState.map[oldMonster.y][oldMonster.x].terrain !== 'sea') { // 海にいない場合
+                monsters.push({
+                    x: oldMonster.x,
+                    y: oldMonster.y,
+                    typeId: 1, // シマオロシ
+                    hp: 1
+                });
+                logAction("旧バージョンの怪獣を「怪獣シマオロシ」として引き継ぎました。");
+            } else {
+                logAction("旧バージョンの怪獣は海にいたため、消滅しました。");
+            }
+        }
+        monster = null; // 旧 monster 変数は使わない
+
         actionQueue = gameState.actionQueue || []; // ロード時にactionQueueがない場合に対応
         warships = gameState.warships || []; // 軍艦データをロード
 
@@ -679,10 +711,11 @@ function saveMyIslandState() {
         food: food,
         population: population,
         turn: turn,
-        achievementPoints: achievementPoints, // 実績Ptを保存
+        achievementPoints: achievementPoints,
         tutorialMissions: tutorialMissions,
         islandName: islandName,
-        monster: monster ? JSON.parse(JSON.stringify(monster)) : null,
+        monster: null,
+        monsters: JSON.parse(JSON.stringify(monsters)),
         actionQueue: JSON.parse(JSON.stringify(actionQueue)),
         warships: JSON.parse(JSON.stringify(warships)),
         economicCrisisTurns: economicCrisisTurns,
@@ -711,6 +744,7 @@ function loadMyIslandState() {
         },
             islandName: "MyIsland",
             monster: null,
+            monsters: [],
             actionQueue: [],
             warships: [], // 軍艦データを初期化
             economicCrisisTurns: 0,
@@ -729,7 +763,25 @@ function loadMyIslandState() {
     achievementPoints= myIslandState.achievementPoints;
     tutorialMissions= myIslandState.tutorialMissions;
     islandName = myIslandState.islandName;
-    monster = myIslandState.monster ? JSON.parse(JSON.stringify(myIslandState.monster)) : null;
+    monsters = myIslandState.monsters ? JSON.parse(JSON.stringify(myIslandState.monsters)) : []; // 新
+    if (myIslandState.monster && monsters.length === 0) { // 旧形式があり、新形式(monsters)がない
+        const oldMonster = myIslandState.monster;
+        if (map[oldMonster.y] && map[oldMonster.y][oldMonster.x]) { // 座標存在チェック
+            const tile = map[oldMonster.y][oldMonster.x];
+            if (tile.terrain !== 'sea') { // 海にいない場合
+                monsters.push({
+                    x: oldMonster.x,
+                    y: oldMonster.y,
+                    typeId: 1, // シマオロシ
+                    hp: 1
+                });
+                logAction("旧バージョンの怪獣を「怪獣シマオロシ」として引き継ぎました。");
+            } else {
+                logAction("旧バージョンの怪獣は海にいたため、消滅しました。");
+            }
+        }
+    }
+    monster = null; // 旧変数はクリア
     actionQueue = JSON.parse(JSON.stringify(myIslandState.actionQueue));
     warships = myIslandState.warships ? JSON.parse(JSON.stringify(myIslandState.warships)) : []; // 軍艦データをロード
     economicCrisisTurns = myIslandState.economicCrisisTurns || 0;
@@ -777,6 +829,7 @@ function resetGame() {
     turn = 0;
     islandName = "MyIsland";
     monster = null;
+    monsters = [];
     actionQueue = [];
     warships = []; // 軍艦データをリセット
     economicCrisisTurns = 0;
@@ -904,11 +957,18 @@ function handleWarshipAttacks() {
 
                 let expGained = 0;
                 let targetType = "不明な施設";
-                if (monster && monster.x === targetX && monster.y === targetY) {
-                    expGained += 1;
-                    targetType = "怪獣";
-                    monster = null; // Monster is "destroyed"
-                    logAction(`${warship.name} は怪獣を討伐し、1 EXPを獲得しました！`);
+                const monsterHit = monsters.find(m => m.x === targetX && m.y === targetY);
+                if (monsterHit) {
+                    expGained += 1; // 経験値
+                    targetType = MONSTER_TYPES[monsterHit.typeId].name;
+                    monsterHit.hp -= 1; // ダメージ
+                    
+                    if (monsterHit.hp <= 0) {
+                        monsters = monsters.filter(m => m !== monsterHit); // 配列から削除
+                        logAction(`${warship.name} は ${targetType} を討伐し、${expGained} EXPを獲得しました！`);
+                    } else {
+                        logAction(`${warship.name} は ${targetType} に命中！ (残り体力: ${monsterHit.hp})`);
+                    }
                 } else {
                     const otherWarshipAtTarget = warships.find(ship => ship.x === targetX && ship.y === targetY && ship !== warship && ship.homePort !== warship.homePort);
                     if (otherWarshipAtTarget) {
@@ -1652,6 +1712,16 @@ turn++;
                           target.terrain = 'waste';
                           logAction(`他島からの砲撃により (${tx},${ty}) が破壊されました`);
                       }
+                      const monsterHit = monsters.find(m => m.x === tx && m.y === ty);
+                      if (monsterHit) {
+                          monsterHit.hp -= 1;
+                          const monsterName = MONSTER_TYPES[monsterHit.typeId] ? MONSTER_TYPES[monsterHit.typeId].name : '怪獣';
+                          logAction(`他島からの砲撃が ${monsterName} に命中！ (残り体力: ${monsterHit.hp})`);
+                          if (monsterHit.hp <= 0) {
+                              monsters = monsters.filter(m => m !== monsterHit);
+                              logAction(`${monsterName} は討伐されました！`);
+                          }
+                      }
                   } else {
                       logAction(`他島からの砲撃は領域外に着弾しました (${tx},${ty})`);
                   }
@@ -1956,6 +2026,10 @@ const newWarship = {
     }
     else if (action === 'dig') {
     const tile = map[y][x];
+    if (monsters.find(m => m.x === x && m.y === y)) {
+        logAction(`(${x},${y}) の掘削は失敗しました（怪獣がいます）`);
+        continue;
+    }
     if (tile.terrain === 'mountain') {
         logAction(`(${x},${y}) の掘削は失敗しました（山は掘削できません）`);
         continue; // 追加 (次のアクション処理へ)
@@ -2052,9 +2126,21 @@ const newWarship = {
             }
             // 防衛施設が破壊されたか、元々存在しない場合、以下の攻撃ロジックが実行される
             const target = map[ty][tx];
+            const monsterHit = monsters.find(m => m.x === tx && m.y === ty);
+            if (monsterHit) {
+                monsterHit.hp -= 1;
+                const monsterName = MONSTER_TYPES[monsterHit.typeId] ? MONSTER_TYPES[monsterHit.typeId].name : '怪獣';
+                logAction(`砲撃が ${monsterName} に命中！ (残り体力: ${monsterHit.hp})`);
+                if (monsterHit.hp <= 0) {
+                    monsters = monsters.filter(m => m !== monsterHit);
+                    logAction(`${monsterName} が砲撃により討伐されました‼`);
+                }
+                hits++; // 命中カウント
+                continue; // タイル破壊はスキップ
+            }
             if (target.terrain === 'mountain') {
                 logAction(`砲撃は山に着弾しましたが、無効でした。 (${tx},${ty})`);
-                continue; // 追加
+                continue;
             }
             if (target.terrain === 'sea') {
                 if (target.facility === 'port') {
@@ -2100,11 +2186,11 @@ const newWarship = {
                 logAction(`砲撃で (${tx},${ty}) を破壊しました`);
             }
 
-            // 怪獣が命中したかチェック
-            if (monster && monster.x === tx && monster.y === ty) {
-              monster = null;
-              logAction(`怪獣が砲撃により討伐されました‼`);
-            }
+            // 怪獣が命中したかチェック(削除済み)
+            // if (monster && monster.x === tx && monster.y === ty) {
+            //   monster = null;
+            //   logAction(`怪獣が砲撃により討伐されました‼`);
+            // }
             hits++;
           } else {
             logAction(`砲撃は領域外に着弾しました (${tx},${ty})`);
@@ -2142,11 +2228,21 @@ const newWarship = {
                                 logAction(`自爆により軍艦 ${targetWarship.name} (${nx},${ny}) は${damage}のダメージを受け撃沈しました！`);
                             } else {
                                 logAction(`自爆により軍艦 ${targetWarship.name} (${nx},${ny}) は${damage}のダメージを受けました。残り耐久: ${targetWarship.currentDurability}`);
+                        const monsterHit = monsters.find(m => m.x === nx && m.y === ny);
+                            }
+                        if (monsterHit) {
+                            const damage = Math.floor(Math.random() * 6) + 5; // 5～10ダメージ
+                            monsterHit.hp -= damage;
+                            const monsterName = MONSTER_TYPES[monsterHit.typeId] ? MONSTER_TYPES[monsterHit.typeId].name : '怪獣';
+                            logAction(`自爆により ${monsterName} (${nx},${ny}) は${damage}のダメージを受けました。残り体力: ${monsterHit.hp}`);
+                            if (monsterHit.hp <= 0) {
+                                monsters = monsters.filter(m => m !== monsterHit);
+                                logAction(`${monsterName} は自爆に巻き込まれ討伐されました！`);
                             }
                         }
                     }
                 }
-            }
+            }            }
             // 周囲1マスを荒地にする
             for (let dx = -1; dx <= 1; dx++) {
                 for (let dy = -1; dy <= 1; dy++) {
@@ -2644,76 +2740,223 @@ if (turn >= 1000 && Math.random() < 0.001) { // 0.1% = 0.001
   }
   if (food < 0) food = 0;
 
-  // 怪獣出現
-  if (!monster && population > 10000 && Math.random() < 0.02) {
-    const candidates = [];
-    for (let y = 0; y < SIZE; y++) {
-      for (let x = 0; x < SIZE; x++) {
-        const tile = map[y][x];
-        if (tile.facility === 'house') {
-          candidates.push({ x, y });
-        }
+  // 1. 出現候補地 (住宅) をリストアップ
+  const spawnCandidates = [];
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const tile = map[y][x];
+      // 住宅であり、かつ他の怪獣がいない場所
+      if (tile.facility === 'house' && !monsters.find(m => m.x === x && m.y === y)) {
+        spawnCandidates.push({ x, y });
       }
-    }
-    if (candidates.length > 0) {
-      const spawn = candidates[Math.floor(Math.random() * candidates.length)];
-      monster = { x: spawn.x, y: spawn.y };
-
-      // 怪獣が出現した場所の住宅を破壊し、人口を減らす
-      const spawnedTile = map[spawn.y][spawn.x];
-      if (spawnedTile.facility === 'house') {
-          population -= spawnedTile.pop;
-          if (population < 0) population = 0;
-      }
-      spawnedTile.terrain = 'waste';
-      spawnedTile.facility = null;
-      spawnedTile.pop = 0;
-      spawnedTile.enhanced = false; // 強化状態もリセット
-
-      logAction(`(${spawn.x},${spawn.y}) に怪獣が出現‼`);
     }
   }
+  if (spawnCandidates.length > 0) {
+      // 2. 出現判定 (種類ごと)
+      for (const typeId in MONSTER_TYPES) {
+          const type = MONSTER_TYPES[typeId];
+          
+          // 3. 出現条件チェック (人口) と確率 (1%)
+          if (type.condition(population) && Math.random() < 0.01) {
+              
+              // 4. 出現場所の決定 (候補地からランダム)
+              if (spawnCandidates.length === 0) break; 
+              const spawnIndex = Math.floor(Math.random() * spawnCandidates.length);
+              const spawn = spawnCandidates[spawnIndex];
+              
+              // 5. 体力(HP)の決定
+              const hp = Math.floor(Math.random() * (type.maxHP - type.minHP + 1)) + type.minHP;
 
-  // 怪獣の移動と被害
-  if (monster) {
-    const directions = [
-      { dx: 0, dy: -1 },
-      { dx: 0, dy: 1 },
-      { dx: -1, dy: 0 },
-      { dx: 1, dy: 0 }
-    ];
-    const possible = directions.filter(({ dx, dy }) => {
-      const nx = monster.x + dx;
-      const ny = monster.y + dy;
-      return nx >= 0 && ny >= 0 && nx < SIZE && ny < SIZE && map[ny][nx].terrain !== 'sea';
-    });
-    if (possible.length > 0) {
-      const { dx, dy } = possible[Math.floor(Math.random() * possible.length)];
-      const nx = monster.x + dx;
-      const ny = monster.y + dy;
-      const targetTile = map[ny][nx];
-      // 怪獣はPP弾に準じる扱いとする（防衛施設を破壊して貫通）
-      const protectingFacility = getProtectingDefenseFacility(nx, ny);
-      if (protectingFacility) {
-          protectingFacility.facility = null;
-          protectingFacility.terrain = 'waste';
-          protectingFacility.enhanced = false;
-          logAction(`怪獣によって (${nx},${ny}) を守っていた防衛施設が破壊されました！`);
+              // 6. 怪獣オブジェクトの生成
+              const newMonster = { 
+                  x: spawn.x, 
+                  y: spawn.y, 
+                  typeId: parseInt(typeId),
+                  hp: hp
+              };
+              monsters.push(newMonster);
+
+              // 7. 出現場所の破壊
+              const spawnedTile = map[spawn.y][spawn.x];
+              if (spawnedTile.facility === 'house') {
+                  population -= spawnedTile.pop;
+                  if (population < 0) population = 0;
+              }
+              spawnedTile.terrain = 'waste';
+              spawnedTile.facility = null;
+              spawnedTile.pop = 0;
+              spawnedTile.enhanced = false; 
+              
+              logAction(`(${spawn.x},${spawn.y}) に ${type.name} (体力: ${hp}) が出現‼`);
+              
+              // 8. 出現した場所を候補地から削除
+              spawnCandidates.splice(spawnIndex, 1);
+          }
+      }
+  }
+
+// 怪獣の移動と能力
+  const monstersThisTurn = [...monsters]; 
+  
+  for (const monster of monstersThisTurn) {
+      // (もし討伐されて配列から消えていたらスキップ)
+      if (!monsters.includes(monster)) continue; 
+      
+      const monsterType = MONSTER_TYPES[monster.typeId];
+      if (!monsterType) continue; // 不明な怪獣はスキップ
+
+      // 1. 移動処理 (アエロガロスは特別)
+      let moveCount = 1;
+      if (monsterType.ability === 'multiMove') {
+          moveCount = Math.floor(Math.random() * 11); // 0～10回
+          if (moveCount > 0) {
+              logAction(`${monsterType.name} は ${moveCount} 回移動する！`);
+          }
       }
 
-      if (targetTile.facility === 'house') {
-        population -= targetTile.pop;
-        if (population < 0) population = 0;
-      }
-      targetTile.terrain = 'waste';
-      targetTile.facility = null;
-      targetTile.pop = 0;
-      targetTile.enhanced = false; // 強化状態もリセット
+      for (let i = 0; i < moveCount; i++) {
+          // (再度、討伐チェック)
+          if (!monsters.includes(monster)) break; 
+          
+          const directions = [
+            { dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }
+          ];
+          const possible = directions.filter(({ dx, dy }) => {
+            const nx = monster.x + dx;
+            const ny = monster.y + dy;
+            return nx >= 0 && ny >= 0 && nx < SIZE && ny < SIZE && 
+                   map[ny][nx].terrain !== 'sea' && // 陸地のみ
+                   !monsters.find(m => m.x === nx && m.y === ny); // 他の怪獣がいない
+          });
 
-      logAction(`怪獣が (${nx},${ny}) を踏み荒らしました。`);
-      monster.x = nx;
-      monster.y = ny;
-    }
+          if (possible.length > 0) {
+            const { dx, dy } = possible[Math.floor(Math.random() * possible.length)];
+            const nx = monster.x + dx;
+            const ny = monster.y + dy;
+            const targetTile = map[ny][nx];
+            
+            // (防衛施設破壊ロジックは共通)
+            const protectingFacility = getProtectingDefenseFacility(nx, ny);
+            if (protectingFacility) {
+                protectingFacility.facility = null;
+                protectingFacility.terrain = 'waste';
+                protectingFacility.enhanced = false;
+                logAction(`${monsterType.name}によって (${nx},${ny}) を守っていた防衛施設が破壊されました！`);
+            }
+
+            if (targetTile.facility === 'house') {
+              population -= targetTile.pop;
+              if (population < 0) population = 0;
+            }
+            targetTile.terrain = 'waste';
+            targetTile.facility = null;
+            targetTile.pop = 0;
+            targetTile.enhanced = false; 
+
+            logAction(`${monsterType.name} が (${nx},${ny}) を踏み荒らしました。`);
+            monster.x = nx;
+            monster.y = ny;
+          }
+      } // (multiMove ループ終わり)
+      
+      // (再度、討伐チェック)
+      if (!monsters.includes(monster)) continue; 
+
+      // 2. 特殊能力の処理
+      if (monsterType.ability === 'destroyArea' && Math.random() < 0.10) { // ヴォルカガロス (10%)
+          logAction(`${monsterType.name} が周囲の陸地を破壊！`);
+          for (let dx = -1; dx <= 1; dx++) {
+              for (let dy = -1; dy <= 1; dy++) {
+                  if (dx === 0 && dy === 0) continue;
+                  const nx = monster.x + dx;
+                  const ny = monster.y + dy;
+                  if (nx >= 0 && ny >= 0 && nx < SIZE && ny < SIZE) {
+                      const tile = map[ny][nx];
+                      if (tile.terrain !== 'sea' && !monsters.find(m => m.x === nx && m.y === ny)) { // 海と他の怪獣以外
+                          if (tile.facility === 'house') {
+                              population -= tile.pop;
+                              if (population < 0) population = 0;
+                          }
+                          tile.terrain = 'waste';
+                          tile.facility = null;
+                          tile.pop = 0;
+                          tile.enhanced = false;
+                      }
+                  }
+              }
+          }
+      } 
+      else if (monsterType.ability === 'landfillSea' && Math.random() < 0.15) { // テラガロス (15%)
+          // 荒地にする海（軍艦含む）を探す
+          const seaTiles = [];
+          for (let y = 0; y < SIZE; y++) {
+              for (let x = 0; x < SIZE; x++) {
+                  if (map[y][x].terrain === 'sea') {
+                      seaTiles.push({ x, y });
+                  }
+              }
+          }
+          if (seaTiles.length > 0) {
+              const { x, y } = seaTiles[Math.floor(Math.random() * seaTiles.length)];
+              const targetWarship = warships.find(ship => ship.x === x && ship.y === y);
+              
+              if (targetWarship && targetWarship.currentDurability > 0 && !targetWarship.isDispatched) {
+                  logAction(`${monsterType.name} が (${x},${y}) の海を埋め立てようとし、軍艦「${targetWarship.name}」に10ダメージ！`);
+                  targetWarship.currentDurability -= 10;
+                  checkAbnormalityOnDamage(targetWarship, 10);
+                  if (targetWarship.currentDurability <= 0) {
+                      targetWarship.currentDurability = 0;
+                      targetWarship.currentFuel = 0;
+                      targetWarship.currentAmmo = 0;
+                      logAction(`軍艦 ${targetWarship.name} は撃沈しました！`);
+                  }
+              } else {
+                  logAction(`${monsterType.name} が (${x},${y}) の海を荒地に変えました！`);
+                  map[y][x].terrain = 'waste';
+                  map[y][x].facility = null;
+                  map[y][x].enhanced = false;
+              }
+          }
+      }
+      else if (monsterType.ability === 'createSea') { // アクアガロス (毎ターン)
+          // 陸地タイルを探す (自分自身と他の怪獣、山、石碑を除く)
+          const landTiles = [];
+          for (let y = 0; y < SIZE; y++) {
+              for (let x = 0; x < SIZE; x++) {
+                  const tile = map[y][x];
+                  if (tile.terrain !== 'sea' && tile.terrain !== 'mountain' && tile.facility !== 'Monument' &&
+                      !(monster.x === x && monster.y === y) && 
+                      !monsters.find(m => m !== monster && m.x === x && m.y === y)) 
+                  {
+                      landTiles.push({ x, y });
+                  }
+              }
+          }
+          if (landTiles.length > 0) {
+              const { x, y } = landTiles[Math.floor(Math.random() * landTiles.length)];
+              const tile = map[y][x];
+              const facilityNameMap = {
+                  farm: '農場',
+                  house: '住宅',
+                  factory: '工場',
+                  gun: '砲台',
+                  port: '港',
+                  defenseFacility: '防衛施設',
+                  Monument: '石碑',
+                  oilRig: '海底油田'
+              };
+              const facilityName = tile.facility ? (facilityNameMap[tile.facility] || tile.facility) : tile.terrain;
+              logAction(`${monsterType.name} が (${x},${y}) の${facilityName}を海に変えました！`);
+              if (tile.facility === 'house') {
+                  population -= tile.pop;
+                  if (population < 0) population = 0;
+              }
+              tile.terrain = 'sea';
+              tile.facility = null;
+              tile.pop = 0;
+              tile.enhanced = false;
+          }
+      }
   }
 
 let gunCount = 0;
@@ -3017,6 +3260,7 @@ window.loadGame = function() {
     }
 }
 
+// 初期化時に自分の島の状態をロード（または初期化）する　
 window.onload = function() {
     loadMyIslandState(); // まず自分の島をロード/初期化
     updateConfirmButton(); // 初回UI更新
