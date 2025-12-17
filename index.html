@@ -1,12 +1,8 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>MSR式箱庭ゲーム　Ver.4.6</title>
+<!DOCTYPE html><html><head>
+  <meta charset="UTF-8"><title>MSR式箱庭ゲーム　Ver.4.6</title>
   <link rel="stylesheet" href="Island.css">
-</head>
-<body>
-<div id="gameControls" style="margin-bottom: 1em;">
+</head><body>
+  <div id="gameControls" style="margin-bottom: 1em;">
   <label for="islandNameInput">島の名前:</label>
   <input type="text" id="islandNameInput" value="MyIsland">
   <button onclick="saveGame()">セーブ</button>
@@ -15,9 +11,7 @@
   <p style="font-size: 0.8em; color: gray;">
     ※セーブデータは直接ファイルとして保存されません。上記のテキストエリアに表示されたデータをコピーして、テキストファイルに貼り付けて保存してください。<br>
     ロードする際は、保存したデータを上記のテキストエリアに貼り付けてから「ロード」ボタンを押してください。
-  </p>
-</div><details>
-  <summary>Ver.4.6.6リリースノート</summary><p>
+  </p></div><details><summary>Ver.4.6.6リリースノート</summary><p>
     <div style="margin-top: 1em; border: 1px solid #ccc; padding: 10px; background-color: #f9f9f9;">
 重要！　更新以前からプレイしていた人は一度手動でセーブ、ロードしてください！</br>
 [見た目]計画キューの可視化、撤回を可能にする</br>
@@ -34,8 +28,9 @@
 [追加]災害「噴火」：上級な島は一定期間　食料産出停止, 人口増加停止</br>
 [追加]災害「経済危機」：上級な島は一定期間　一部資金凍結, 資金算出激減, 維持費激増</br>
 [追加]災害「地震/津波」：上級な島で稀に発生し、広範囲が破壊される</br>
-    </div>
-</p></details>
+</br>
+[Beta]工場と農場のシステムを変更</br>
+    </div></p></details>
 <p>陸地面積: <span id="landArea">0</span>Km² | 砲撃可能数上限: <span id="gunCount">0</span>回 | 実績Pt: <span id="achievementPoints">0</span>Pt</br>資金: <span id="money">1000</span>G | 食料: <span id="food">500</span> | 人口: <span id="population">0</span>人| 農場規模: <span id="totalFarmScale">0</span> | 工場規模: <span id="totalFactoryScale">0</span> | ターン: <span id="turn">0</span> | 島の名前: <span id="currentIslandName"></span></p>
 <div>
     <label for="otherIslandActionInput">他島の行動:</label>
@@ -139,4 +134,5 @@
 </div>
 <div id="log" style="margin-top:1em;"></div>
 <script src="script.js"></script></body></html>
+
 
