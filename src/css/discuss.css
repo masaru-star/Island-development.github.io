@@ -1,0 +1,222 @@
+    :root {
+      --primary-color: #4f46e5;
+      --primary-hover: #4338ca;
+      --bg-color: #f8fafc;
+      --card-bg: #ffffff;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+      --border-color: #e2e8f0;
+      --success-color: #10b981;
+      --error-color: #ef4444;
+    }
+
+    body {
+      font-family: 'Noto Sans JP', 'Kiwi Maru', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      margin: 0;
+      line-height: 1.6;
+      padding-bottom: 50px;
+    }
+
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+      padding: 20px 0;
+    }
+
+    h1 {
+      font-family: 'Kiwi Maru', serif;
+      font-size: 2rem;
+      margin: 0;
+      color: var(--primary-color);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      background: #e2e8f0;
+      padding: 5px;
+      border-radius: 12px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      color: var(--text-muted);
+    }
+
+    .tab-btn.active {
+      background: var(--card-bg);
+      color: var(--primary-color);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 25px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .card.active {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      margin-bottom: 5px;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    input, textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 1rem;
+      box-sizing: border-box;
+      transition: border-color 0.2s;
+    }
+
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: 12px;
+      background-color: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-primary:hover {
+      background-color: var(--primary-hover);
+    }
+
+    .status-msg {
+      margin-top: 15px;
+      text-align: center;
+      font-size: 0.9rem;
+      min-height: 1.4em;
+    }
+
+    .status-msg.success { color: var(--success-color); }
+    .status-msg.error { color: var(--error-color); }
+
+    #posts {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .post-item {
+      background: var(--card-bg);
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 15px;
+      border: 1px solid var(--border-color);
+      transition: transform 0.2s;
+    }
+
+    .post-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      font-size: 0.85rem;
+    }
+
+    .post-user {
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .post-role {
+      background: #f1f5f9;
+      padding: 2px 8px;
+      border-radius: 4px;
+      color: var(--text-muted);
+      margin-left: 8px;
+    }
+
+    .post-time {
+      color: var(--text-muted);
+    }
+
+    .post-message {
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .refresh-area {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 10px;
+    }
+
+    .btn-refresh {
+        background: none;
+        border: none;
+        color: var(--primary-color);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.9rem;
+        font-weight: 500;
+    }
+
+    .terms-link {
+        text-align: center;
+        font-size: 0.8rem;
+        margin-top: 20px;
+    }
+
+    .terms-link a {
+        color: var(--text-muted);
+        text-decoration: none;
+    }
