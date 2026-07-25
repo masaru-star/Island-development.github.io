@@ -228,28 +228,28 @@ async function loadPosts() {
       fetch(`${url}/rest/v1/banned_devices?select=device_id`, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}` }})
     ]);
 
+    if (!postsRes.ok) throw new Error(`posts取得失敗: ${postsRes.status} ${await postsRes.text()}`);
+    if (!usersRes.ok) throw new Error(`users取得失敗: ${usersRes.status} ${await usersRes.text()}`);
+    if (!bannedRes.ok) throw new Error(`banned_devices取得失敗: ${bannedRes.status} ${await bannedRes.text()}`);
+
     const posts = await postsRes.json();
     const users = await usersRes.json();
     const bannedDevices = await bannedRes.json();
+    if (!Array.isArray(posts) || !Array.isArray(users) || !Array.isArray(bannedDevices)) {
+      throw new Error("取得したデータが配列形式ではありません。");
+    }
     const bannedSet = new Set(bannedDevices.map(b => b.device_id));
     const userMap = {};
     users.forEach(u => userMap[u.id] = u);
-
     list.innerHTML = "";
-
     posts.forEach(post => {
       const user = userMap[post.user_id];
       if (!user || user.is_banned || bannedSet.has(user.device_id) || (post.device_id && bannedSet.has(post.device_id))) return;
-
       const time = new Date(post.created_at).toLocaleString("ja-JP", { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
       const name = user.name ?? "名無しさん";
       const role = user.role ?? "User";
-      
-      // adminロールの場合のクラス分け
       const roleClass = role.toLowerCase() === 'admin' ? 'post-role role-admin' : 'post-role';
-      // インラインスタイルでも対応（CSSがない場合を考慮）
       const roleStyle = role.toLowerCase() === 'admin' ? 'color: red; font-weight: bold;' : '';
-
       const li = document.createElement("li");
       li.className = "post-item";
       li.innerHTML = `
@@ -264,12 +264,11 @@ async function loadPosts() {
       `;
       list.appendChild(li);
     });
-
     if (list.innerHTML === "") {
         list.innerHTML = "<p style='text-align:center;color:#64748b;'>投稿がまだありません。</p>";
     }
-
   } catch (e) {
+    console.error("loadPosts Error:", e);
     list.innerHTML = "<p style='text-align:center;color:red;'>データの取得に失敗しました。</p>";
   }
 }
