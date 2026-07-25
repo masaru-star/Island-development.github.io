@@ -106,13 +106,12 @@ grant execute on function public.hakoniwa_save(bigint, text, jsonb, boolean) to 
 grant execute on function public.hakoniwa_server_timestamp() to anon, authenticated;
 
 -- discuss.html
-create extension if not exists "uuid-ossp";
-create table public.banned_devices (
+create table if not exists public.banned_devices (
     device_id uuid primary key,
     created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
-create table public.users (
-    id uuid primary key default uuid_generate_v4(),
+create table if not exists public.users (
+    id uuid primary key default gen_random_uuid(),
     name text not null unique,
     password text not null,
     device_id uuid not null,
@@ -120,8 +119,8 @@ create table public.users (
     is_banned boolean default false not null,
     created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
-create table public.posts (
-    id uuid primary key default uuid_generate_v4(),
+create table if not exists public.posts (
+    id uuid primary key default gen_random_uuid(),
     user_id uuid references public.users(id) on delete cascade not null,
     device_id uuid,
     message text not null check (char_length(message) <= 500),
@@ -132,12 +131,13 @@ values (
     '07003402-51ea-4a7c-8279-0ef4258250af',
     'システム管理者',
     'd7a8fbb307d7809469ca9abcb0082e4f8d5651e4a213b437c29bcf8a8d1a1b1a', 
-    uuid_generate_v4(),
+    gen_random_uuid(),
     'Admin'
 ) on conflict (id) do nothing;
 alter table public.banned_devices disable row level security;
 alter table public.users disable row level security;
 alter table public.posts disable row level security;
+-- API経由（anon / authenticated）からのアクセス権限を付与
 grant select, insert, update, delete on public.banned_devices to anon, authenticated;
 grant select, insert, update, delete on public.users to anon, authenticated;
 grant select, insert, update, delete on public.posts to anon, authenticated;
