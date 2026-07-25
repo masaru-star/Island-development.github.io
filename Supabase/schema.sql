@@ -138,3 +138,6 @@ values (
 alter table public.banned_devices disable row level security;
 alter table public.users disable row level security;
 alter table public.posts disable row level security;
+grant select, insert, update, delete on public.banned_devices to anon, authenticated;
+grant select, insert, update, delete on public.users to anon, authenticated;
+grant select, insert, update, delete on public.posts to anon, authenticated;
