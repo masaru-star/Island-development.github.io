@@ -67,7 +67,7 @@ async function registerUser() {
   const encodedName = encodeURIComponent(name);
 
   try {
-    const checkRes = await fetch(`${url}/rest/v1/users?name=eq.${encodedName}`, {
+    const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/users?name=eq.${encodedName}`, {
       headers: { apikey: KEY, Authorization: `Bearer ${KEY}` }
     });
     const existingUsers = await checkRes.json();
@@ -77,7 +77,7 @@ async function registerUser() {
       return;
     }
 
-    const res = await fetch(`${url}/rest/v1/users`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/users`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -95,7 +95,7 @@ async function registerUser() {
     showStatus(reg_status, "登録が完了しました！投稿してみましょう。", "success");
     document.getElementById("reg_password").value = "";
     
-    await fetch(`${url}/rest/v1/posts`, {
+    await fetch(`${SUPABASE_URL}/rest/v1/posts`, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: KEY, Authorization: `Bearer ${KEY}` },
         body: JSON.stringify({
@@ -132,7 +132,7 @@ async function postMessage() {
   const encodedName = encodeURIComponent(name);
 
   try {
-    const authRes = await fetch(`${url}/rest/v1/users?name=eq.${encodedName}&password=eq.${hashedPassword}`, {
+    const authRes = await fetch(`${SUPABASE_URL}/rest/v1/users?name=eq.${encodedName}&password=eq.${hashedPassword}`, {
       headers: { apikey: KEY, Authorization: `Bearer ${KEY}` }
     });
     const user = await authRes.json();
@@ -147,7 +147,7 @@ async function postMessage() {
       return;
     }
 
-    const banRes = await fetch(`${url}/rest/v1/banned_devices?device_id=eq.${deviceId}`, {
+    const banRes = await fetch(`${SUPABASE_URL}/rest/v1/banned_devices?device_id=eq.${deviceId}`, {
       headers: { apikey: KEY, Authorization: `Bearer ${KEY}` }
     });
     const banned = await banRes.json();
@@ -156,7 +156,7 @@ async function postMessage() {
       return;
     }
 
-    const res = await fetch(`${url}/rest/v1/posts`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/posts`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -223,9 +223,9 @@ async function loadPosts() {
 
   try {
     const [postsRes, usersRes, bannedRes] = await Promise.all([
-      fetch(`${url}/rest/v1/posts?select=id,message,created_at,user_id,device_id&order=created_at.desc`, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}` }}),
-      fetch(`${url}/rest/v1/users?select=id,name,role,is_banned,device_id`, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}` }}),
-      fetch(`${url}/rest/v1/banned_devices?select=device_id`, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}` }})
+      fetch(`${SUPABASE_URL}/rest/v1/posts?select=id,message,created_at,user_id,device_id&order=created_at.desc`, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}` }}),
+      fetch(`${SUPABASE_URL}/rest/v1/users?select=id,name,role,is_banned,device_id`, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}` }}),
+      fetch(`${SUPABASE_URL}/rest/v1/banned_devices?select=device_id`, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}` }})
     ]);
 
     if (!postsRes.ok) throw new Error(`posts取得失敗: ${postsRes.status} ${await postsRes.text()}`);
