@@ -1,4 +1,9 @@
 let monster = null;
+const HOUSE_NATURAL_POP_LIMIT = 10000;
+const HOUSE_INVITED_POP_LIMIT = 20000;
+const UNKNOWN_WARSHIP_HOME_PORT = "不明";
+const UNKNOWN_WARSHIP_NAME = "所属不明の軍艦";
+
 const MONSTER_TYPES = {
   1: {
     name: "怪獣シマオロシ",
@@ -752,6 +757,8 @@ function getActionName(action, x, y, extraData) {
     buildMonument: "石碑建設",
     upgradeMonument: "石碑強化",
     sellMonument: "石碑売却",
+    sellMonumentPartial: "石碑部分売却",
+    inviteResidents: "誘致活動",
     initializeIsland: "島の初期化",
     delayAction: "遅延行動",
   };
@@ -827,6 +834,84 @@ function getActionName(action, x, y, extraData) {
   return { name, coord };
 }
 
+function applyHouseBombardmentDamage(tile) {
+  if (!tile || tile.facility !== "house") return false;
+  if (tile.pop > HOUSE_NATURAL_POP_LIMIT) {
+    const reduced = tile.pop - 9000;
+    population = Math.max(0, population - reduced);
+    tile.pop = 9000;
+    logAction(
+      "高密度の市街地は砲撃により人口9000人まで減少しましたが、廃墟化は免れました。",
+    );
+    return true;
+  }
+  population = Math.max(0, population - tile.pop);
+  tile.pop = 0;
+  tile.facility = null;
+  tile.terrain = "waste";
+  tile.enhanced = false;
+  return true;
+}
+
+function getActiveAndDockedWarshipCount() {
+  return (
+    warships.filter((ship) => ship.currentDurability > 0).length +
+    dockedWarships.filter((ship) => ship.currentDurability > 0).length
+  );
+}
+
+function spawnUnknownWarshipIfNeeded() {
+  const ownedWarshipCount = getActiveAndDockedWarshipCount();
+  if (ownedWarshipCount < 1 || population < 100000 || Math.random() >= 0.02)
+    return;
+  const possibleSeaTiles = [];
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const tile = map[y][x];
+      const existingWarship = warships.find(
+        (ship) => ship.x === x && ship.y === y,
+      );
+      if (tile.terrain === "sea" && tile.facility === null && !existingWarship) {
+        possibleSeaTiles.push({ x, y });
+      }
+    }
+  }
+  if (possibleSeaTiles.length === 0) return;
+  const { x, y } =
+    possibleSeaTiles[Math.floor(Math.random() * possibleSeaTiles.length)];
+  const maxDurability = 12 + ownedWarshipCount * 3;
+  const maxMainGun = 3 + ownedWarshipCount * 2;
+  const durability = Math.floor(Math.random() * (maxDurability - 5 + 1)) + 5;
+  const mainGun = Math.floor(Math.random() * maxMainGun) + 1;
+  warships.push({
+    x,
+    y,
+    homePort: UNKNOWN_WARSHIP_HOME_PORT,
+    name: UNKNOWN_WARSHIP_NAME,
+    exp: "NaN",
+    currentFuel: 100,
+    maxFuel: 100,
+    maxDurability: durability,
+    currentDurability: durability,
+    mainGun,
+    torpedo: 0,
+    antiAir: 0,
+    maxAmmo: 999,
+    currentAmmo: 999,
+    reconnaissance: 2,
+    accuracyImprovement: 1,
+    isDispatched: false,
+    abnormality: null,
+    nickname: "",
+    medalsEarned: {},
+  });
+  logAction(`所属不明の軍艦が (${x},${y}) に出現しました！`);
+}
+
+function getWarshipAttackDamage(ship, attackIndex) {
+  return attackIndex < ship.mainGun ? 1 : 3;
+}
+
 function getBombardTypeLabel(action) {
   if (action === "bombard") return "砲撃";
   if (action === "spreadBombard") return "拡散弾砲撃";
@@ -854,6 +939,7 @@ function getRequiredMoneyForTask(task) {
   if (action === "ppBombard") return 10000000 * (task.count || 1);
   if (action === "randomBombard") return 500000 * (task.count || 1);
   if (action === "buildMonument" || action === "upgradeMonument") return 500000000;
+  if (action === "inviteResidents") return 10000000;
   if (action === "setWarshipNickname") return 100000;
   if (action === "buildWarship") return Number(task?.warshipData?.originalCost || 0);
   if (action === "resupplyWarshipAmmo") return 1000 * (task.amount || 1);
@@ -1888,13 +1974,6 @@ function encodeWarshipData(warship) {
 function decodeWarshipData(encodedData) {
   const jsonString = decodeURIComponent(atob(encodedData));
   const data = JSON.parse(jsonString);
-  if (data.isDispatched === undefined) data.isDispatched = false;
-  if (data.maxFuel === undefined) data.maxFuel = 100;
-  if (data.originalCost === undefined) data.originalCost = 0; // 追加
-  if (data.nickname === undefined) data.nickname = "";
-  if (data.medalsEarned === undefined) data.medalsEarned = {};
-  if (data.nameSignature === undefined) data.nameSignature = "";
-  if (data.signaturePublicKey === undefined) data.signaturePublicKey = null;
   return data;
 }
 
@@ -1959,39 +2038,14 @@ async function loadGame() {
     };
     islandName = gameState.islandName || "MyIsland";
 
-    // ★変更: 旧 monster データ処理
-    monsters = gameState.monsters || []; // 新しい形式を優先
-    if (gameState.monster && !gameState.monsters) {
-      // 旧形式(monster)があり、新形式(monsters)がない
-      const oldMonster = gameState.monster;
-      // mapデータ(gameState.map)を使って地形チェック
-      if (
-        gameState.map[oldMonster.y] &&
-        gameState.map[oldMonster.y][oldMonster.x] &&
-        gameState.map[oldMonster.y][oldMonster.x].terrain !== "sea"
-      ) {
-        // 海にいない場合
-        monsters.push({
-          x: oldMonster.x,
-          y: oldMonster.y,
-          typeId: 1, // シマオロシ
-          hp: 1,
-        });
-        logAction(
-          "旧バージョンの怪獣を「怪獣シマオロシ」として引き継ぎました。",
-        );
-      } else {
-        logAction("旧バージョンの怪獣は海にいたため、消滅しました。");
-      }
-    }
-    monster = null; // 旧 monster 変数は使わない
+    monsters = gameState.monsters || [];
+    monster = null;
 
     actionQueue = gameState.actionQueue || []; // ロード時にactionQueueがない場合に対応
     warships = gameState.warships || []; // 軍艦データをロード
     dockedWarships = gameState.dockedWarships || [];
     islandSigningKeyPair = gameState.islandSigningKeyPair || null;
 
-    // 過去のセーブデータにenhancedプロパティがない場合のために初期化
     map.forEach((row) =>
       row.forEach((tile) => {
         if (tile.enhanced === undefined) {
@@ -2008,7 +2062,6 @@ async function loadGame() {
         ship.isDispatched = false;
       }
       if (ship.maxFuel === undefined) {
-        // 旧データ対応
         ship.maxFuel = 100;
       }
       if (ship.isKenzouWarship === undefined) {
@@ -2128,30 +2181,8 @@ function loadMyIslandState() {
   islandName = myIslandState.islandName;
   monsters = myIslandState.monsters
     ? JSON.parse(JSON.stringify(myIslandState.monsters))
-    : []; // 新
-  if (myIslandState.monster && monsters.length === 0) {
-    // 旧形式があり、新形式(monsters)がない
-    const oldMonster = myIslandState.monster;
-    if (map[oldMonster.y] && map[oldMonster.y][oldMonster.x]) {
-      // 座標存在チェック
-      const tile = map[oldMonster.y][oldMonster.x];
-      if (tile.terrain !== "sea") {
-        // 海にいない場合
-        monsters.push({
-          x: oldMonster.x,
-          y: oldMonster.y,
-          typeId: 1, // シマオロシ
-          hp: 1,
-        });
-        logAction(
-          "旧バージョンの怪獣を「怪獣シマオロシ」として引き継ぎました。",
-        );
-      } else {
-        logAction("旧バージョンの怪獣は海にいたため、消滅しました。");
-      }
-    }
-  }
-  monster = null; // 旧変数はクリア
+    : [];
+  monster = null;
   actionQueue = JSON.parse(JSON.stringify(myIslandState.actionQueue));
   warships = myIslandState.warships
     ? JSON.parse(JSON.stringify(myIslandState.warships))
@@ -2169,7 +2200,6 @@ function loadMyIslandState() {
       ship.isDispatched = false;
     }
     if (ship.maxFuel === undefined) {
-      // 旧データ対応
       ship.maxFuel = 100;
     }
     if (ship.originalCost === undefined) {
@@ -2184,7 +2214,6 @@ function loadMyIslandState() {
     ship.isDispatched = false;
   });
 
-  // 過去のセーブデータにenhancedプロパティがない場合のために初期化
   map.forEach((row) =>
     row.forEach((tile) => {
       if (tile.enhanced === undefined) {
@@ -2285,6 +2314,7 @@ async function handleWarshipAttacks() {
     if (warship.reconnaissance === 2) attackRadius = 3; // 7x7 range
 
     for (let i = 0; i < totalAttacks; i++) {
+      const attackDamage = getWarshipAttackDamage(warship, i);
       if (warship.abnormality === "fire") {
         logAction(
           `軍艦 ${warship.name} は火災が発生しているため、攻撃できません。`,
@@ -2429,8 +2459,8 @@ async function handleWarshipAttacks() {
               );
             }
             checkAbnormalityOnHit(otherWarshipAtTarget);
-            otherWarshipAtTarget.currentDurability -= 1; // Reduce durability
-            registerWarshipDamageTaken(otherWarshipAtTarget, 1);
+            otherWarshipAtTarget.currentDurability -= attackDamage;
+            registerWarshipDamageTaken(otherWarshipAtTarget, attackDamage);
             if (otherWarshipAtTarget.currentDurability <= 0) {
               otherWarshipAtTarget.fuel = 0; // 残り燃料を0に
               otherWarshipAtTarget.currentFuel = 0; // 現在燃料も0に
@@ -2449,12 +2479,7 @@ async function handleWarshipAttacks() {
             logAction(
               `${warship.name} は市街地 (${targetTile.pop}人) を攻撃し、${expGained} EXPを獲得しました！`,
             );
-            population -= targetTile.pop;
-            if (population < 0) population = 0;
-            targetTile.pop = 0; // Destroy population
-            targetTile.facility = null; // Remove facility
-            targetTile.terrain = "waste"; // Turn into waste
-            targetTile.enhanced = false; // Remove enhancement
+            applyHouseBombardmentDamage(targetTile);
           } else if (targetTile.Monument) {
             targetType = "石碑";
             if (targetTile.MonumentLevel >= 2) {
@@ -2656,6 +2681,10 @@ window.confirmAction = async function () {
     "spreadBombard",
     "ppBombard",
     "concentratedFire",
+    "buildMonument",
+    "upgradeMonument",
+    "sellMonument",
+    "sellMonumentPartial",
   ];
   if (requiresTileSelection.includes(action) && !targetTileSelected) {
     logAction(`アクションの対象タイルを選択してください`);
@@ -2667,7 +2696,14 @@ window.confirmAction = async function () {
     tile = map[selectedY][selectedX];
   }
 
-  if (action === "exportFood") {
+  if (action === "inviteResidents") {
+    if (money < 10000000) {
+      logAction(`誘致活動に失敗しました（資金不足）`);
+      return;
+    }
+    actionQueue.push({ action, x: null, y: null });
+    logAction(`誘致活動を計画しました`);
+  } else if (action === "exportFood") {
     const amount = parseInt(document.getElementById("exportAmount").value);
     if (!isNaN(amount) && amount > 0) {
       actionQueue.push({ action, amount, x: null, y: null });
@@ -3135,8 +3171,8 @@ window.confirmAction = async function () {
         jsonString = await gunzipText(base64ToBytes(payload));
       } else {
         jsonString = decodeURIComponent(atob(touristCode));
-        const otherIslandData = JSON.parse(jsonString);
       }
+      const otherIslandData = JSON.parse(jsonString);
       targetIslandName = otherIslandData.islandName;
     } catch (e) {
       logAction(`無効な観光者コードです。`);
@@ -3632,7 +3668,7 @@ window.nextTurn = async function () {
                     }
                     targetWarship.currentDurability -= 1; // 耐久値1減少
                     registerWarshipDamageTaken(targetWarship, 1);
-                    checkAbnormalityOnDamage(targetWarship, damage);
+                    checkAbnormalityOnDamage(targetWarship, 1);
                     if (targetWarship.currentDurability <= 0) {
                       targetWarship.fuel = 0; // 残り燃料を0に
                       targetWarship.currentFuel = 0; // 現在燃料も0に
@@ -3657,8 +3693,8 @@ window.nextTurn = async function () {
                 // 陸地の場合
                 if (target.facility) {
                   if (target.facility === "house") {
-                    population -= target.pop;
-                    if (population < 0) population = 0;
+                    applyHouseBombardmentDamage(target);
+                    continue;
                   }
                   target.facility = null;
                   target.enhanced = false; // 施設破壊時に強化状態もリセット
@@ -3821,6 +3857,7 @@ window.nextTurn = async function () {
     logAction("ターンが進んだため、自島に戻りました。");
   }
   await handleWarshipAttacks();
+  spawnUnknownWarshipIfNeeded();
   let foodChange = 0,
     moneyChange = 0;
   let prevPopulation = population; // 前ターンの人口を保存
@@ -3963,6 +4000,7 @@ window.nextTurn = async function () {
       const attackLimit = ship.mainGun + ship.torpedo;
       let executed = 0;
       for (let n = 0; n < attackLimit; n++) {
+        const attackDamage = getWarshipAttackDamage(ship, n);
       if (Math.random() < hitChance) {
           if (ship.currentAmmo <= 0 || ship.currentFuel <= 0) {
             registerWarshipMiss(ship);
@@ -4014,8 +4052,8 @@ window.nextTurn = async function () {
             );
             if (targetWarship && !targetWarship.isDispatched) {
               registerWarshipHit(ship);
-              targetWarship.currentDurability -= 1;
-              registerWarshipDamageTaken(targetWarship, 1);
+              targetWarship.currentDurability -= attackDamage;
+              registerWarshipDamageTaken(targetWarship, attackDamage);
               if (targetWarship.currentDurability <= 0) {
                 targetWarship.currentDurability = 0;
                 targetWarship.currentAmmo = 0;
@@ -4037,8 +4075,8 @@ window.nextTurn = async function () {
           } else {
             registerWarshipHit(ship);
             if (targetTile.facility === "house") {
-              population -= targetTile.pop;
-              if (population < 0) population = 0;
+              applyHouseBombardmentDamage(targetTile);
+              continue;
             }
             targetTile.facility = null;
             targetTile.enhanced = false;
@@ -4176,22 +4214,48 @@ window.nextTurn = async function () {
           `(${x},${y}) の石碑強化は失敗しました（条件不適合または資金不足）`,
         );
       }
-    else if (action === "sellMonument")
+    else if (action === "sellMonument" || action === "sellMonumentPartial")
       if (tile && tile.facility === "Monument") {
-        handleHouseOverwrite(tile);
-        tile.terrain = "plain";
-        tile.facility = null;
-        tile.pop = 0;
-        tile.enhanced = false;
-        money += 500000000 * tile.MonumentLevel;
-        tile.MonumentLevel = 0;
-        logAction(`(${x},${y}) の石碑を売却しました`);
+        const sellLevel =
+          action === "sellMonumentPartial"
+            ? Math.min(10, tile.MonumentLevel)
+            : tile.MonumentLevel;
+        money += 500000000 * sellLevel;
+        tile.MonumentLevel -= sellLevel;
+        if (tile.MonumentLevel <= 0) {
+          tile.terrain = "plain";
+          tile.facility = null;
+          tile.pop = 0;
+          tile.enhanced = false;
+          tile.MonumentLevel = 0;
+        }
+        logAction(`(${x},${y}) の石碑を${sellLevel}レベル分売却しました`);
       } else {
         logAction(
-          `(${x},${y}) の石碑売却は失敗しました（条件不適合または資金不足）`,
+          `(${x},${y}) の石碑売却は失敗しました（条件不適合）`,
         );
       }
-    else if (action === "cutForest") {
+    else if (action === "inviteResidents") {
+      if (money >= 10000000) {
+        const houses = map.flat().filter((t) => t.facility === "house");
+        let addedTotal = 0;
+        for (const house of houses) {
+          const add =
+            population <= HOUSE_NATURAL_POP_LIMIT
+              ? Math.min(HOUSE_INVITED_POP_LIMIT - house.pop, house.pop)
+              : Math.min(HOUSE_INVITED_POP_LIMIT - house.pop, 100);
+          if (add > 0) {
+            house.pop += add;
+            addedTotal += add;
+          }
+        }
+        money -= 10000000;
+        population += addedTotal;
+        logAction(`誘致活動により人口が${addedTotal}人増加しました`);
+      } else {
+        logAction(`誘致活動は失敗しました（資金不足）`);
+      }
+    } else if (action === "cutForest") {
       if (tile && tile.terrain === "forest") {
         const gain = Math.floor(Math.random() * 421) + 80;
         money += gain;
@@ -4516,8 +4580,9 @@ window.nextTurn = async function () {
               // 陸地の場合
               if (target.facility) {
                 if (target.facility === "house") {
-                  population -= target.pop;
-                  if (population < 0) population = 0;
+                  applyHouseBombardmentDamage(target);
+                  hits++;
+                  continue;
                 }
               }
               target.facility = null;
@@ -4822,7 +4887,8 @@ window.nextTurn = async function () {
       }
       if (tile.facility === "house") {
         const growth = Math.floor(Math.random() * 151 + 50);
-        const added = Math.min(7500 - tile.pop, growth);
+        const naturalLimit = HOUSE_NATURAL_POP_LIMIT;
+        const added = Math.max(0, Math.min(naturalLimit - tile.pop, growth));
         if (volcanoTurns === 0) {
           // 追加
           tile.pop += added;
@@ -5163,7 +5229,7 @@ window.nextTurn = async function () {
           logAction(
             `隕石が軍艦「${targetWarship.name}」に命中、甚大な被害が出ました。 (残り耐久: ${targetWarship.currentDurability})`,
           );
-          checkAbnormalityOnDamage(targetWarship, damage);
+          checkAbnormalityOnDamage(targetWarship, 35);
         }
       }
     } else if (protectingFacility) {
@@ -6034,9 +6100,8 @@ window.loadGame = async function () {
     food = gameState.food;
     population = gameState.population;
     turn = gameState.turn;
-    achievementPoints = gameState.achievementPoints || 0; // 実績Ptをロード、旧データ対応で0を代入
+    achievementPoints = gameState.achievementPoints || 0;
     tutorialMissions = gameState.tutorialMissions || {
-      // チュートリアルミッションをロード、旧データ対応
       "01": false,
       "02": false,
       "03": false,
@@ -6067,7 +6132,6 @@ window.loadGame = async function () {
     frozenMoney = gameState.frozenMoney || 0;
     volcanoTurns = gameState.volcanoTurns || 0;
 
-    // 過去のセーブデータにenhancedプロパティがない場合のために初期化
     map.forEach((row) =>
       row.forEach((tile) => {
         if (tile.enhanced === undefined) {
