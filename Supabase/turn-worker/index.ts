@@ -158,6 +158,7 @@ function runAction(state: any, task: any, outgoing: any[]) {
     else if (action === 'remodelWarshipWeapon' && ship && n(ship.maxAmmo) >= 1000 && n(ship.exp) > 0) { ship.exp = 0; ship.maxAmmo -= 1000; if (task.weaponType === 'torpedo') ship.torpedo = n(ship.torpedo) + 1; else ship.mainGun = n(ship.mainGun) + 1; }
     else if (action === 'enhanceWarship' && ship && n(ship.exp) > 0) { ship.exp = 0; ship.maxDurability = n(ship.maxDurability) + 1; ship.currentDurability = n(ship.currentDurability) + 1; }
     else if (action === 'decommissionWarship' && ship && ship.homePort === state.islandName) state.warships = warships(state).filter((s: any) => s !== ship);
+    else if (action === 'discardWarshipWreckage' && ship && n(ship.currentDurability) <= 0) state.warships = warships(state).filter((s: any) => s !== ship);
     else if (action === 'moveWarshipToDock' && ship) { state.dockedWarships = Array.isArray(state.dockedWarships) ? state.dockedWarships : []; state.dockedWarships.push({ ...ship, isDocked: true, isDispatched: false }); state.warships = warships(state).filter((s: any) => s !== ship); }
     else if (action === 'returnWarshipFromDock') { state.dockedWarships = Array.isArray(state.dockedWarships) ? state.dockedWarships : []; const docked = state.dockedWarships.find((s: any) => s.name === task.name || (n(s.x) === x && n(s.y) === y)); if (docked) { state.dockedWarships = state.dockedWarships.filter((s: any) => s !== docked); warships(state).push({ ...docked, x, y, isDocked: false }); } }
   }
