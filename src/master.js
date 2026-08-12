@@ -745,6 +745,7 @@ function getActionName(action, x, y, extraData) {
     repairWarship: "軍艦修理",
     enhanceWarship: "軍艦増強",
     decommissionWarship: "軍艦除籍",
+    discardWarshipWreckage: "残骸破棄",
     dispatchWarship: "軍艦派遣",
     requestWarshipReturn: "軍艦帰還要請",
     moveWarshipToDock: "船渠へ移動",
@@ -3417,6 +3418,36 @@ window.confirmAction = async function () {
     renderMap();
     updateStatus();
     saveMyIslandState();
+  } else if (action === "discardWarshipWreckage") {
+    if (!targetTileSelected) {
+      logAction(`破棄対象の残骸が配置されているタイルを選択してください。`);
+      return;
+    }
+    const shipIndex = warships.findIndex(
+      (s) => s.x === selectedX && s.y === selectedY,
+    );
+    const ship = warships[shipIndex];
+
+    if (!ship) {
+      logAction(`選択したタイルに軍艦の残骸がありません。`);
+      return;
+    }
+    if (ship.currentDurability > 0) {
+      logAction(`耐久が0の軍艦の残骸のみ破棄できます。`);
+      return;
+    }
+    const confirmation = confirm(
+      `${getWarshipDisplayName(ship)} の残骸を破棄します。資金の返還はありません。よろしいですか？`,
+    );
+    if (confirmation) {
+      warships.splice(shipIndex, 1);
+      logAction(`軍艦 ${getWarshipDisplayName(ship)} の残骸を破棄しました。資金の返還はありません。`);
+      renderMap();
+      updateStatus();
+      saveMyIslandState();
+    } else {
+      logAction(`軍艦 ${getWarshipDisplayName(ship)} の残骸破棄をキャンセルしました。`);
+    }
   } else if (action === "decommissionWarship") {
     if (!targetTileSelected) {
       logAction(`除籍対象の軍艦が配置されているタイルを選択してください。`);
