@@ -2,6 +2,8 @@
 ![Good First Issue](https://img.shields.io/badge/good%20first--issue-welcome-blueviolet) ![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg) ![Help Wanted](https://img.shields.io/badge/translation-welcome-brightgreen)
 
 [こちらから遊べます](https://masaru-star.github.io/JS.Hakoniwa-Island/)<br>
+[コミュニティはこちら - Discord](https://discord.gg/VbP49uqUF)
+
 初心者向けにチュートリアルを作成しました。詳細な説明書はGistsで作成中です。
 
 > **important!:** Ver.4.7以前のデータは、島管理方式が根本的に変更されるため、旧バージョンのデータとの互換性を維持できなくなります。9月中旬頃に失効する予定なのでダウンロードをしてプレイしている方は早めに`Ver.5.0`など新データへの移行をお願いします。<br>
