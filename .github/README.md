@@ -52,6 +52,7 @@ Interact with other islands, battle monsters that suddenly appear, and overcome 
 ### We welcome translations and extension suggestions.
 本作は「箱庭諸島」のリスペクト作品です。 This work is a tribute to "箱庭諸島".
 
-* **Original Inspired by**: 徳岡宏樹（箱庭諸島）
+* **Original**: 徳岡宏樹（箱庭諸島）
+* **Inspiration**: [RED（二次元箱庭諸島）](https://hako2d-mj.xii.jp/)
 * **Developer**: [masaru-star](https://github.com/masaru-star)
 * **Using Library**: [See here](NOTICE.md)
