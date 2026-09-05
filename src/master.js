@@ -114,6 +114,10 @@ let islandName = "MyIsland";
 let warships = []; // 軍艦の配列を追加
 let dockedWarships = []; // 船渠に収納中の軍艦
 let islandSigningKeyPair = null; // P-256署名鍵ペア(JWK形式)
+// 「move」で開く別枠の島。オンライン版では利用しないローカル専用の状態。
+const MOVE_ISLAND_STORAGE_KEY = "moveIslandState";
+let isMoveIslandOpen = false;
+let moveIslandState = null;
 console.log(
   `%cSTOP!!!!`,
   "color: red; font-size: 40px; font-weight: bold; -webkit-text-stroke: 1px black; font-family: sans-serif;",
@@ -721,6 +725,7 @@ function getActionName(action, x, y, extraData) {
   const actionNames = {
     buildFarm: "農場建設",
     buildFactory: "工場建設",
+    buildMiningSite: "採掘場整備",
     enhanceFacility: "設備強化",
     buildPort: "港建設",
     buildGun: "砲台建設",
@@ -1728,7 +1733,9 @@ function renderMap() {
                         ? "🛡️"
                         : displayFacility === "oilRig"
                           ? "🛢️"
-                          : "";
+                          : displayFacility === "miningSite"
+                            ? "⛏️"
+                            : "";
         displayTerrain === "mountain" ? "⛰️" : "";
       }
       if (tile.enhanced) {
@@ -1772,6 +1779,7 @@ function showTileInfo(x, y) {
       defenseFacility: "防衛施設",
       Monument: "石碑",
       oilRig: "海底油田",
+      miningSite: "採掘場",
     };
 
     let facilityName = facilityNameMap[tile.facility] || tile.facility;
@@ -2104,6 +2112,12 @@ async function loadGame() {
 
 // 自分の島の状態を保存
 function saveMyIslandState() {
+  if (isMoveIslandOpen) {
+    moveIslandState = createHakoniwaSerializableState();
+    moveIslandState.achievementPoints = achievementPoints;
+    localStorage.setItem(MOVE_ISLAND_STORAGE_KEY, JSON.stringify(moveIslandState));
+    return;
+  }
   myIslandState = {
     map: JSON.parse(JSON.stringify(map)), // ディープコピー
     money: money,
@@ -2227,12 +2241,73 @@ function loadMyIslandState() {
   );
 
   isViewingOtherIsland = false;
+  isMoveIslandOpen = false;
   updateStatus();
   renderMap();
   logAction("自島に戻りました。");
   document.getElementById("actionSelect").value = ""; // コマンド選択をリセット
   updateConfirmButton(); // UIを更新
   renderActionQueue();
+}
+
+async function toggleMoveIsland() {
+  // online.html does not expose this feature, and its server state must never be changed by it.
+  if (window.HAKONIWA_SUPABASE_MODE) return;
+
+  const sharedAchievementPoints = achievementPoints;
+  if (isMoveIslandOpen) {
+    saveMyIslandState();
+    isMoveIslandOpen = false;
+    loadMyIslandState();
+    achievementPoints = sharedAchievementPoints;
+    saveMyIslandState();
+    updateStatus();
+    logAction("元の島に戻りました。");
+    return;
+  }
+
+  saveMyIslandState();
+  const storedMoveIsland = localStorage.getItem(MOVE_ISLAND_STORAGE_KEY);
+  if (storedMoveIsland) {
+    try {
+      moveIslandState = JSON.parse(storedMoveIsland);
+    } catch (error) {
+      console.error(error);
+      localStorage.removeItem(MOVE_ISLAND_STORAGE_KEY);
+    }
+  }
+  if (moveIslandState) {
+    applyHakoniwaSerializableState(moveIslandState);
+  } else {
+    money = 2500;
+    food = 1000;
+    population = 0;
+    turn = 0;
+    islandName = "MyIsland";
+    monsters = [];
+    monster = null;
+    actionQueue = [];
+    warships = [];
+    dockedWarships = [];
+    economicCrisisTurns = 0;
+    frozenMoney = 0;
+    volcanoTurns = 0;
+    islandSigningKeyPair = null;
+    selectedX = null;
+    selectedY = null;
+    initMap();
+    await ensureIslandSigningKeyPair({ silent: true });
+  }
+  achievementPoints = sharedAchievementPoints;
+  isViewingOtherIsland = false;
+  isMoveIslandOpen = true;
+  saveMyIslandState();
+  document.getElementById("actionSelect").value = "";
+  updateStatus();
+  renderMap();
+  renderActionQueue();
+  updateConfirmButton();
+  logAction(moveIslandState ? "別枠の島を再開しました。" : "別枠の島を新しく開きました。");
 }
 
 // ゲームを初期設定に戻す関数
@@ -3528,6 +3603,16 @@ window.confirmAction = async function () {
 
 // nextTurn関数をグローバルスコープで定義
 window.nextTurn = async function () {
+  // 「move」はターンを進めずに、ローカル専用の別枠の島を切り替えるコマンド。
+  const moveCommandInput = document.getElementById("otherIslandActionInput");
+  if (
+    moveCommandInput?.value === "move" &&
+    !window.HAKONIWA_SUPABASE_MODE
+  ) {
+    moveCommandInput.value = "";
+    await toggleMoveIsland();
+    return;
+  }
   turn++;
   logAction(`＝＝＝＝＝ターン開始: ${turn}＝＝＝＝＝`);
   initWarshipTurnStats();
@@ -4158,6 +4243,14 @@ window.nextTurn = async function () {
       );
       updateStatus();
       saveMyIslandState();
+    } else if (action === "buildMiningSite") {
+      if (tile && tile.terrain === "mountain" && tile.facility === null) {
+        tile.facility = "miningSite";
+        tile.enhanced = false;
+        logAction(`(${x},${y}) に採掘場を整備しました`);
+      } else {
+        logAction(`(${x},${y}) の採掘場整備は失敗しました（山以外には整備できません）`);
+      }
     } else if (action === "buildFarm") {
       if (tile && tile.terrain === "plain" && money >= 100) {
         handleHouseOverwrite(tile);
@@ -4916,6 +5009,11 @@ window.nextTurn = async function () {
           foodChange += tile.enhanced ? 300 : 100; // 強化農場は食料300
         }
       }
+      if (tile.facility === "miningSite" && tile.terrain === "mountain") {
+        // 採掘場は設備強化の対象外で、常に固定量を生産する。
+        foodChange += 300;
+        moneyChange += 20000;
+      }
       if (tile.facility === "house") {
         const growth = Math.floor(Math.random() * 151 + 50);
         const naturalLimit = HOUSE_NATURAL_POP_LIMIT;
@@ -5578,6 +5676,7 @@ window.nextTurn = async function () {
           defenseFacility: "防衛施設",
           Monument: "石碑",
           oilRig: "海底油田",
+          miningSite: "採掘場",
         };
         const facilityName = tile.facility
           ? facilityNameMap[tile.facility] || tile.facility
